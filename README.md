@@ -75,6 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scri
 ```
 
 The installer automatically installs a compatible Go toolchain when the host Go version is too old for this repository.
+Re-running the same one-liner also upgrades an existing installation and restarts the service with the new binary.
 
 Optional: customize installer behavior via environment variables:
 

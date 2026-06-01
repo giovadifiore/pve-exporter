@@ -8,6 +8,7 @@ GO_VERSION="${GO_VERSION:-1.26.2}"
 GO_BIN=""
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 SERVICE_FILE="${SERVICE_FILE:-/etc/systemd/system/smartctl-exporter.service}"
+SERVICE_NAME="${SERVICE_NAME:-smartctl-exporter}"
 LISTEN_ADDRESS="${LISTEN_ADDRESS:-:9634}"
 METRICS_PATH="${METRICS_PATH:-/metrics}"
 SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
@@ -153,16 +154,21 @@ ProtectControlGroups=true
 WantedBy=multi-user.target
 EOF
 
-echo "[6/6] Enabling and starting service..."
+echo "[6/6] Applying service changes..."
 systemctl daemon-reload
-systemctl enable --now smartctl-exporter
 
-if systemctl is-active --quiet smartctl-exporter; then
-  echo "Installation complete. smartctl-exporter is active."
+if systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  systemctl restart "${SERVICE_NAME}"
+else
+  systemctl enable --now "${SERVICE_NAME}"
+fi
+
+if systemctl is-active --quiet "${SERVICE_NAME}"; then
+  echo "Installation/upgrade complete. ${SERVICE_NAME} is active."
   echo "Health check: curl http://127.0.0.1:9634/health"
   echo "JSON test:   curl 'http://127.0.0.1:9634/metrics?disk=sda'"
 else
   echo "Service failed to start. Showing status:" >&2
-  systemctl --no-pager -l status smartctl-exporter >&2 || true
+  systemctl --no-pager -l status "${SERVICE_NAME}" >&2 || true
   exit 1
 fi
