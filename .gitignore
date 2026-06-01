@@ -1,5 +1,6 @@
 # Binaries
 pve-exporter
+smartctl-exporter
 pve-exporter-linux*
 pve-exporter.exe
 *.exe~

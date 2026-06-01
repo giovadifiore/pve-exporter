@@ -248,7 +248,9 @@ func (e *exporter) metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runSmartctl(ctx context.Context, binaryPath string, disk string) (*smartctlOutput, int, string, error) {
-	cmd := exec.CommandContext(ctx, binaryPath, "-j", "-a", disk)
+	// Always include -a so smartctl returns the full set of available values.
+	args := []string{"-j", "-a", disk}
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
