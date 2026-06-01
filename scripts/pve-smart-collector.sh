@@ -1,6 +1,6 @@
 #!/bin/bash
 # pve-smart-collector.sh
-# Collects SMART data from all physical disks and writes to JSON file
+# Collects SMART data from remote smartctl-exporter HTTP endpoints and writes to JSON file
 # Run as root via cron every 5 minutes (SMART data doesn't change frequently)
 #
 # Usage: /usr/local/bin/pve-smart-collector.sh
@@ -10,6 +10,8 @@ OUTPUT_DIR="/var/lib/pve-exporter"
 OUTPUT_FILE="${OUTPUT_DIR}/smart.json"
 TEMP_FILE="${OUTPUT_DIR}/smart.json.tmp"
 LOCK_FILE="${OUTPUT_DIR}/.smart-collector.lock"
+CONFIG_FILE="${CONFIG_FILE:-/etc/pve-exporter/smart-collector-urls.conf}"
+HTTP_TIMEOUT="${HTTP_TIMEOUT:-15}"
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 
 # Ensure output directory exists before anything else
@@ -21,19 +23,36 @@ if ! flock -n 200; then
     exit 0
 fi
 
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Config file not found: $CONFIG_FILE" >&2
+    exit 1
+fi
+
 echo "{\"hostname\":\"$HOSTNAME\",\"timestamp\":$(date +%s),\"disks\":[" > "$TEMP_FILE"
 
 first=true
-for disk in $(lsblk -d -n -o NAME,TYPE | awk '$2=="disk" && $1!~/^zd/ && $1!~/^loop/ {print $1}'); do
-    smart_json=$(/usr/sbin/smartctl -j -a "/dev/$disk" 2>/dev/null)
+while IFS= read -r endpoint || [ -n "$endpoint" ]; do
+    endpoint=$(echo "$endpoint" | sed 's/^\s*//;s/\s*$//')
+    [ -z "$endpoint" ] && continue
+    [ "${endpoint#\#}" != "$endpoint" ] && continue
+
+    smart_json=$(curl -fsSL --max-time "$HTTP_TIMEOUT" "$endpoint" 2>/dev/null)
     [ -z "$smart_json" ] && continue
-    
+
     parsed=$(echo "$smart_json" | python3 -c "
-import sys, json
+import sys, json, urllib.parse
 try:
     data = json.load(sys.stdin)
     if 'device' not in data: sys.exit(1)
-    r = {'device': '$disk', 'model': data.get('model_name', 'Unknown'), 'serial': data.get('serial_number', 'Unknown'), 'type': 'unknown', 'healthy': 1}
+    device = data.get('device', {}).get('name', 'unknown')
+    if isinstance(device, str) and device.startswith('/dev/'):
+        device = device.split('/')[-1]
+    if not device or str(device).strip() == '':
+        parsed_url = urllib.parse.urlparse('$endpoint')
+        q = urllib.parse.parse_qs(parsed_url.query)
+        disk = q.get('disk', ['unknown'])[0]
+        device = disk.split('/')[-1] if '/' in disk else disk
+    r = {'device': str(device), 'model': data.get('model_name', 'Unknown'), 'serial': data.get('serial_number', 'Unknown'), 'type': 'unknown', 'healthy': 1}
     di = data.get('device', {})
     if di.get('protocol') == 'NVMe': r['type'] = 'nvme'
     elif di.get('protocol') == 'ATA': r['type'] = 'sata'
@@ -56,12 +75,12 @@ try:
     print(json.dumps(r))
 except: sys.exit(1)
 " 2>/dev/null)
-    
+
     if [ -n "$parsed" ]; then
         [ "$first" = true ] && first=false || echo "," >> "$TEMP_FILE"
         echo "$parsed" >> "$TEMP_FILE"
     fi
-done
+done < "$CONFIG_FILE"
 
 echo "]}" >> "$TEMP_FILE"
 

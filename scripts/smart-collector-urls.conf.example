@@ -1,0 +1,6 @@
+# One URL per line.
+# Use smartctl-exporter endpoints that return raw smartctl JSON.
+# Empty lines and lines starting with # are ignored.
+
+http://fs.local.home:9634/metrics?disk=sda
+http://fs.local.home:9634/metrics?disk=sdb

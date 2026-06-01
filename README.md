@@ -469,7 +469,7 @@ These metrics are collected automatically from `/proc/diskstats` without requiri
 
 #### Disk SMART (Optional Setup)
 
-SMART metrics require additional setup - a separate script runs via cron as root. Labels: `node`, `device`, `model`, `serial`, `type`.
+SMART metrics require additional setup - a separate script runs via cron as root and fetches SMART JSON over HTTP from smartctl-exporter endpoints. Labels: `node`, `device`, `model`, `serial`, `type`.
 
 | Metric | Description |
 |--------|-----------|
@@ -487,17 +487,30 @@ SMART metrics require additional setup - a separate script runs via cron as root
 sudo wget -O /usr/local/bin/pve-smart-collector.sh \
   https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/pve-smart-collector.sh
 sudo chmod +x /usr/local/bin/pve-smart-collector.sh
+
+# 2. Install endpoint config template
+sudo mkdir -p /etc/pve-exporter
+sudo wget -O /etc/pve-exporter/smart-collector-urls.conf \
+  https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/smart-collector-urls.conf.example
+
+# 3. Edit endpoint list (one URL per line)
+sudo nano /etc/pve-exporter/smart-collector-urls.conf
+
+# Example endpoint format:
+# http://127.0.0.1:9634/metrics?disk=sda&format=json
+# http://smart-host:9634/metrics?disk=/dev/nvme0n1&format=json
+
 sudo mkdir -p /var/lib/pve-exporter
 
-# 2. Add cron job (every 5 minutes - SMART data doesn't change frequently)
+# 4. Add cron job (every 5 minutes - SMART data doesn't change frequently)
 echo '*/5 * * * * root /usr/local/bin/pve-smart-collector.sh' | sudo tee /etc/cron.d/pve-smart-collector
 
-# 3. Verify
+# 5. Verify
 sudo /usr/local/bin/pve-smart-collector.sh
 curl -s http://localhost:9221/metrics | grep pve_disk
 ```
 
-> **Note:** If SMART data file is missing or stale, those metrics are silently skipped.
+> **Note:** Set `CONFIG_FILE=/path/to/urls.conf` to use a custom endpoint list file. If SMART data file is missing or stale, those metrics are silently skipped.
 ## 🔒 Authentication & Permissions
 
 For security best practices, create a dedicated monitoring user with **read-only** permissions.
