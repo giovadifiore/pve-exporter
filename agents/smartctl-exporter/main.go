@@ -63,20 +63,6 @@ type exporter struct {
 	timeout     time.Duration
 }
 
-type jsonMetricsResponse struct {
-	Disk                   string         `json:"disk"`
-	Labels                 map[string]string `json:"labels"`
-	SmartctlUp             int            `json:"smartctl_up"`
-	SmartctlCommandExit    int            `json:"smartctl_command_exit_status"`
-	DiskHealthy            *bool          `json:"smartctl_disk_healthy,omitempty"`
-	TemperatureCelsius     *float64       `json:"smartctl_disk_temperature_celsius,omitempty"`
-	PowerOnHours           *float64       `json:"smartctl_disk_power_on_hours,omitempty"`
-	PercentageUsed         *float64       `json:"smartctl_disk_percentage_used,omitempty"`
-	AvailableSparePercent  *float64       `json:"smartctl_disk_available_spare_percent,omitempty"`
-	DataWrittenBytes       *float64       `json:"smartctl_disk_data_written_bytes,omitempty"`
-	Stderr                 string         `json:"stderr,omitempty"`
-}
-
 var diskNamePattern = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
 
 func main() {
@@ -130,9 +116,21 @@ func (e *exporter) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), e.timeout)
 	defer cancel()
 
-	out, exitCode, stderrText, err := runSmartctl(ctx, e.smartctlBin, disk)
+	rawOut, exitCode, stderrText, err := runSmartctl(ctx, e.smartctlBin, disk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("smartctl error: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(rawOut)
+		return
+	}
+
+	var out smartctlOutput
+	if err := json.Unmarshal(rawOut, &out); err != nil {
+		http.Error(w, fmt.Sprintf("invalid smartctl JSON output: %v", err), http.StatusBadGateway)
 		return
 	}
 
@@ -141,44 +139,8 @@ func (e *exporter) metricsHandler(w http.ResponseWriter, r *http.Request) {
 		{key: "device", value: firstNonEmpty(out.Device.Name, disk)},
 		{key: "model", value: firstNonEmpty(out.ModelName, "unknown")},
 		{key: "serial", value: firstNonEmpty(out.SerialNumber, "unknown")},
-		{key: "type", value: detectDiskType(out)},
+		{key: "type", value: detectDiskType(&out)},
 		{key: "protocol", value: firstNonEmpty(out.Device.Protocol, "unknown")},
-	}
-
-	if format == "json" {
-		response := jsonMetricsResponse{
-			Disk:                diskParam,
-			Labels:              labelsToMap(labels),
-			SmartctlUp:          1,
-			SmartctlCommandExit: exitCode,
-			Stderr:              stderrText,
-		}
-
-		if out.SmartStatus.Passed != nil {
-			response.DiskHealthy = out.SmartStatus.Passed
-		}
-		if temp, ok := extractTemperature(out); ok {
-			response.TemperatureCelsius = &temp
-		}
-		if hours, ok := extractPowerOnHours(out); ok {
-			response.PowerOnHours = &hours
-		}
-		if out.NVMeSmartHealthInformationLog.PercentageUsed != nil {
-			response.PercentageUsed = out.NVMeSmartHealthInformationLog.PercentageUsed
-		}
-		if out.NVMeSmartHealthInformationLog.AvailableSpare != nil {
-			response.AvailableSparePercent = out.NVMeSmartHealthInformationLog.AvailableSpare
-		}
-		if out.NVMeSmartHealthInformationLog.DataUnitsWritten != nil {
-			bytesWritten := *out.NVMeSmartHealthInformationLog.DataUnitsWritten * 512000
-			response.DataWrittenBytes = &bytesWritten
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, fmt.Sprintf("failed to encode JSON response: %v", err), http.StatusInternalServerError)
-		}
-		return
 	}
 
 	var b strings.Builder
@@ -206,13 +168,13 @@ func (e *exporter) metricsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if temp, ok := extractTemperature(out); ok {
+	if temp, ok := extractTemperature(&out); ok {
 		b.WriteString("# HELP smartctl_disk_temperature_celsius Disk temperature in Celsius.\n")
 		b.WriteString("# TYPE smartctl_disk_temperature_celsius gauge\n")
 		writeMetric(&b, "smartctl_disk_temperature_celsius", temp, labels...)
 	}
 
-	if hours, ok := extractPowerOnHours(out); ok {
+	if hours, ok := extractPowerOnHours(&out); ok {
 		b.WriteString("# HELP smartctl_disk_power_on_hours Disk power-on hours.\n")
 		b.WriteString("# TYPE smartctl_disk_power_on_hours gauge\n")
 		writeMetric(&b, "smartctl_disk_power_on_hours", hours, labels...)
@@ -247,7 +209,7 @@ func (e *exporter) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
-func runSmartctl(ctx context.Context, binaryPath string, disk string) (*smartctlOutput, int, string, error) {
+func runSmartctl(ctx context.Context, binaryPath string, disk string) ([]byte, int, string, error) {
 	// Always include -a so smartctl returns the full set of available values.
 	args := []string{"-j", "-a", disk}
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
@@ -276,12 +238,7 @@ func runSmartctl(ctx context.Context, binaryPath string, disk string) (*smartctl
 		return nil, exitCode, stderr.String(), fmt.Errorf("smartctl returned empty output")
 	}
 
-	var out smartctlOutput
-	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &out); unmarshalErr != nil {
-		return nil, exitCode, stderr.String(), fmt.Errorf("invalid smartctl JSON output: %w", unmarshalErr)
-	}
-
-	return &out, exitCode, strings.TrimSpace(stderr.String()), nil
+	return stdout.Bytes(), exitCode, strings.TrimSpace(stderr.String()), nil
 }
 
 func normalizeDisk(input string) (string, error) {
@@ -383,14 +340,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func labelsToMap(labels []label) map[string]string {
-	m := make(map[string]string, len(labels))
-	for _, l := range labels {
-		m[l.key] = l.value
-	}
-	return m
 }
 
 func truncate(value string, maxLen int) string {
