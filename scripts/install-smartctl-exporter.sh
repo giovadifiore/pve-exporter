@@ -5,6 +5,7 @@ REPO_OWNER="${REPO_OWNER:-giovadifiore}"
 REPO_NAME="${REPO_NAME:-pve-exporter}"
 REPO_REF="${REPO_REF:-main}"
 GO_VERSION="${GO_VERSION:-1.26.2}"
+GO_BIN=""
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 SERVICE_FILE="${SERVICE_FILE:-/etc/systemd/system/smartctl-exporter.service}"
 LISTEN_ADDRESS="${LISTEN_ADDRESS:-:9634}"
@@ -37,11 +38,12 @@ ensure_go_toolchain() {
 
   if command -v go >/dev/null 2>&1; then
     current_go="$(command -v go)"
-    current_version="$(go version | awk '{print $3}' | sed 's/^go//')"
+    current_version="$("${current_go}" version | awk '{print $3}' | sed 's/^go//')"
   fi
 
   if [[ -n "${current_version}" ]] && version_ge "${current_version}" "${GO_VERSION}"; then
     echo "Using existing Go ${current_version} (${current_go})."
+    GO_BIN="${current_go}"
     return 0
   fi
 
@@ -61,15 +63,17 @@ ensure_go_toolchain() {
   tar -C /usr/local -xzf "${TMP_DIR}/${go_tgz}"
 
   export PATH="/usr/local/go/bin:${PATH}"
+  hash -r
+  GO_BIN="/usr/local/go/bin/go"
 
   local installed_version
-  installed_version="$(go version | awk '{print $3}' | sed 's/^go//')"
+  installed_version="$("${GO_BIN}" version | awk '{print $3}' | sed 's/^go//')"
   if ! version_ge "${installed_version}" "${GO_VERSION}"; then
     echo "Failed to install compatible Go version. Found: ${installed_version}" >&2
     exit 1
   fi
 
-  echo "Go toolchain ready: $(go version)"
+  echo "Go toolchain ready: $("${GO_BIN}" version)"
 }
 
 if [[ ${EUID} -ne 0 ]]; then
@@ -106,6 +110,7 @@ cleanup() {
 trap cleanup EXIT
 
 ensure_go_toolchain
+echo "Using Go binary: ${GO_BIN}"
 
 echo "[2/6] Downloading source from GitHub..."
 git clone --depth 1 --branch "${REPO_REF}" "https://github.com/${REPO_OWNER}/${REPO_NAME}.git" "${TMP_DIR}/repo"
@@ -113,7 +118,7 @@ git clone --depth 1 --branch "${REPO_REF}" "https://github.com/${REPO_OWNER}/${R
 echo "[3/6] Building smartctl-exporter..."
 (
   cd "${TMP_DIR}/repo"
-  go build -o "${TMP_DIR}/smartctl-exporter" ./agents/smartctl-exporter
+  "${GO_BIN}" build -o "${TMP_DIR}/smartctl-exporter" ./agents/smartctl-exporter
 )
 
 echo "[4/6] Installing binary to ${INSTALL_DIR}..."
