@@ -36,6 +36,85 @@ chmod +x pve-exporter-linux-amd64
 ./pve-exporter-linux-amd64 -config config.yml
 ```
 
+### Lightweight SMART Exporter (On-Demand)
+
+This repository also includes a tiny standalone exporter that executes `smartctl -j -a` for a disk selected via URL query parameter.
+
+```bash
+# Build
+make build-smartctl
+
+# Run (requires smartctl installed, usually as root for full SMART data)
+./smartctl-exporter -listen-address :9634
+```
+
+Query a disk:
+
+```bash
+# short disk name (JSON format, default)
+curl "http://127.0.0.1:9634/metrics?disk=sda"
+
+# full device path
+curl "http://127.0.0.1:9634/metrics?disk=/dev/nvme0n1&format=json"
+
+# Prometheus format
+curl "http://127.0.0.1:9634/metrics?disk=/dev/nvme0n1&format=prometheus"
+```
+
+Available endpoints:
+- `/metrics?disk=<disk>&format=<json|prometheus>`: scrape SMART output for one disk (default format: `json`)
+- `/health`: health probe
+- `/`: quick usage text
+
+#### Run smartctl-exporter as a systemd service
+
+One-line installer (downloads from GitHub and installs dependencies, binary, and service):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bigtcze/pve-exporter/main/scripts/install-smartctl-exporter.sh | sudo bash
+```
+
+Optional: customize installer behavior via environment variables:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bigtcze/pve-exporter/main/scripts/install-smartctl-exporter.sh | \
+  sudo REPO_REF=main LISTEN_ADDRESS=:9634 METRICS_PATH=/metrics SMARTCTL_BIN=/usr/sbin/smartctl bash
+```
+
+Use the provided unit file in `examples/smartctl-exporter.service`.
+
+```bash
+# Build locally (or download a release binary)
+make build-smartctl
+
+# Install the binary
+sudo install -m 0755 smartctl-exporter /usr/local/bin/smartctl-exporter
+
+# Install systemd unit
+sudo install -m 0644 examples/smartctl-exporter.service /etc/systemd/system/smartctl-exporter.service
+
+# Reload, enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable smartctl-exporter
+sudo systemctl start smartctl-exporter
+
+# Check status/logs
+sudo systemctl status smartctl-exporter
+sudo journalctl -u smartctl-exporter -f
+```
+
+Verify that the service responds:
+
+```bash
+# Default JSON format
+curl "http://127.0.0.1:9634/metrics?disk=sda"
+
+# Prometheus format (recommended for Prometheus scraping)
+curl "http://127.0.0.1:9634/metrics?disk=sda&format=prometheus"
+```
+
+Note: the service runs as `root` by default because `smartctl` usually requires elevated privileges to read SMART data from block devices.
+
 ### CLI Commands
 
 | Command | Description |
