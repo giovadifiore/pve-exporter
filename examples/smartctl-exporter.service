@@ -1,6 +1,6 @@
 [Unit]
 Description=SMARTCTL Exporter for Prometheus
-Documentation=https://github.com/bigtcze/pve-exporter
+Documentation=https://github.com/giovadifiore/pve-exporter
 After=network-online.target
 Wants=network-online.target
 

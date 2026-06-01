@@ -1,8 +1,8 @@
 # Proxmox VE Exporter
-[![Go Report Card](https://goreportcard.com/badge/github.com/bigtcze/pve-exporter)](https://goreportcard.com/report/github.com/bigtcze/pve-exporter)
-[![GitHub release](https://img.shields.io/github/release/bigtcze/pve-exporter.svg)](https://github.com/bigtcze/pve-exporter/releases)
-[![GitHub Downloads](https://img.shields.io/github/downloads/bigtcze/pve-exporter/total.svg)](https://github.com/bigtcze/pve-exporter/releases)
-[![License](https://img.shields.io/github/license/bigtcze/pve-exporter.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/giovadifiore/pve-exporter)](https://goreportcard.com/report/github.com/giovadifiore/pve-exporter)
+[![GitHub release](https://img.shields.io/github/release/giovadifiore/pve-exporter.svg)](https://github.com/giovadifiore/pve-exporter/releases)
+[![GitHub Downloads](https://img.shields.io/github/downloads/giovadifiore/pve-exporter/total.svg)](https://github.com/giovadifiore/pve-exporter/releases)
+[![License](https://img.shields.io/github/license/giovadifiore/pve-exporter.svg)](LICENSE)
 
 A professional Prometheus exporter for Proxmox VE, written in Go. It collects comprehensive metrics from your Proxmox nodes, virtual machines (QEMU), LXC containers, and storage, exposing them for monitoring and alerting.
 
@@ -29,7 +29,7 @@ A professional Prometheus exporter for Proxmox VE, written in Go. It collects co
 
 ```bash
 # Download latest release
-wget https://github.com/bigtcze/pve-exporter/releases/latest/download/pve-exporter-linux-amd64
+wget https://github.com/giovadifiore/pve-exporter/releases/latest/download/pve-exporter-linux-amd64
 chmod +x pve-exporter-linux-amd64
 
 # Run manually
@@ -71,13 +71,13 @@ Available endpoints:
 One-line installer (downloads from GitHub and installs dependencies, binary, and service):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bigtcze/pve-exporter/main/scripts/install-smartctl-exporter.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/install-smartctl-exporter.sh | sudo bash
 ```
 
 Optional: customize installer behavior via environment variables:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bigtcze/pve-exporter/main/scripts/install-smartctl-exporter.sh | \
+curl -fsSL https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/install-smartctl-exporter.sh | \
   sudo REPO_REF=main LISTEN_ADDRESS=:9634 METRICS_PATH=/metrics SMARTCTL_BIN=/usr/sbin/smartctl bash
 ```
 
@@ -148,7 +148,7 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin pve-exporter
 
 ```bash
 sudo wget -O /usr/local/bin/pve-exporter \
-  https://github.com/bigtcze/pve-exporter/releases/latest/download/pve-exporter-linux-amd64
+  https://github.com/giovadifiore/pve-exporter/releases/latest/download/pve-exporter-linux-amd64
 sudo chmod +x /usr/local/bin/pve-exporter
 ```
 
@@ -189,7 +189,7 @@ sudo chmod 640 /etc/pve-exporter/config.yml
 sudo cat > /etc/systemd/system/pve-exporter.service << 'EOF'
 [Unit]
 Description=Proxmox VE Exporter for Prometheus
-Documentation=https://github.com/bigtcze/pve-exporter
+Documentation=https://github.com/giovadifiore/pve-exporter
 After=network-online.target
 Wants=network-online.target
 
@@ -482,7 +482,7 @@ SMART metrics require additional setup - a separate script runs via cron as root
 ```bash
 # 1. Install collector script
 sudo wget -O /usr/local/bin/pve-smart-collector.sh \
-  https://raw.githubusercontent.com/bigtcze/pve-exporter/main/scripts/pve-smart-collector.sh
+  https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/pve-smart-collector.sh
 sudo chmod +x /usr/local/bin/pve-smart-collector.sh
 sudo mkdir -p /var/lib/pve-exporter
 
@@ -507,7 +507,7 @@ For security best practices, create a dedicated monitoring user with **read-only
 
 ```bash
 # Clone
-git clone https://github.com/bigtcze/pve-exporter.git
+git clone https://github.com/giovadifiore/pve-exporter.git
 cd pve-exporter
 
 # Build

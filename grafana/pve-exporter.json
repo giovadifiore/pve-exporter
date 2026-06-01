@@ -86,7 +86,7 @@
             "title": "GitHub",
             "tooltip": "PVE Exporter Repository",
             "type": "link",
-            "url": "https://github.com/bigtcze/pve-exporter"
+            "url": "https://github.com/giovadifiore/pve-exporter"
         }
     ],
     "liveNow": false,

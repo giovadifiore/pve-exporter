@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_OWNER="${REPO_OWNER:-bigtcze}"
+REPO_OWNER="${REPO_OWNER:-giovadifiore}"
 REPO_NAME="${REPO_NAME:-pve-exporter}"
 REPO_REF="${REPO_REF:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
