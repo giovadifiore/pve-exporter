@@ -74,11 +74,13 @@ One-line installer (downloads from GitHub and installs dependencies, binary, and
 curl -fsSL https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/install-smartctl-exporter.sh | sudo bash
 ```
 
+The installer automatically installs a compatible Go toolchain when the host Go version is too old for this repository.
+
 Optional: customize installer behavior via environment variables:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/giovadifiore/pve-exporter/main/scripts/install-smartctl-exporter.sh | \
-  sudo REPO_REF=main LISTEN_ADDRESS=:9634 METRICS_PATH=/metrics SMARTCTL_BIN=/usr/sbin/smartctl bash
+  sudo REPO_REF=main GO_VERSION=1.26.2 LISTEN_ADDRESS=:9634 METRICS_PATH=/metrics SMARTCTL_BIN=/usr/sbin/smartctl bash
 ```
 
 Use the provided unit file in `examples/smartctl-exporter.service`.

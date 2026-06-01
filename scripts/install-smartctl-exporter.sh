@@ -4,12 +4,73 @@ set -euo pipefail
 REPO_OWNER="${REPO_OWNER:-giovadifiore}"
 REPO_NAME="${REPO_NAME:-pve-exporter}"
 REPO_REF="${REPO_REF:-main}"
+GO_VERSION="${GO_VERSION:-1.26.2}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 SERVICE_FILE="${SERVICE_FILE:-/etc/systemd/system/smartctl-exporter.service}"
 LISTEN_ADDRESS="${LISTEN_ADDRESS:-:9634}"
 METRICS_PATH="${METRICS_PATH:-/metrics}"
 SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
 SCRAPE_TIMEOUT="${SCRAPE_TIMEOUT:-10s}"
+
+version_ge() {
+  # Returns success when $1 >= $2
+  [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
+}
+
+detect_go_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64)
+      echo "amd64"
+      ;;
+    aarch64|arm64)
+      echo "arm64"
+      ;;
+    *)
+      echo "unsupported"
+      ;;
+  esac
+}
+
+ensure_go_toolchain() {
+  local current_go=""
+  local current_version=""
+
+  if command -v go >/dev/null 2>&1; then
+    current_go="$(command -v go)"
+    current_version="$(go version | awk '{print $3}' | sed 's/^go//')"
+  fi
+
+  if [[ -n "${current_version}" ]] && version_ge "${current_version}" "${GO_VERSION}"; then
+    echo "Using existing Go ${current_version} (${current_go})."
+    return 0
+  fi
+
+  local go_arch
+  go_arch="$(detect_go_arch)"
+  if [[ "${go_arch}" == "unsupported" ]]; then
+    echo "Unsupported CPU architecture for automatic Go install: $(uname -m)" >&2
+    exit 1
+  fi
+
+  local go_tgz="go${GO_VERSION}.linux-${go_arch}.tar.gz"
+  local go_url="https://go.dev/dl/${go_tgz}"
+
+  echo "Installing Go ${GO_VERSION} (${go_arch}) from ${go_url}..."
+  curl -fsSL "${go_url}" -o "${TMP_DIR}/${go_tgz}"
+  rm -rf /usr/local/go
+  tar -C /usr/local -xzf "${TMP_DIR}/${go_tgz}"
+
+  export PATH="/usr/local/go/bin:${PATH}"
+
+  local installed_version
+  installed_version="$(go version | awk '{print $3}' | sed 's/^go//')"
+  if ! version_ge "${installed_version}" "${GO_VERSION}"; then
+    echo "Failed to install compatible Go version. Found: ${installed_version}" >&2
+    exit 1
+  fi
+
+  echo "Go toolchain ready: $(go version)"
+}
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "This installer must run as root (use sudo)." >&2
@@ -30,7 +91,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "[1/6] Installing dependencies..."
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git golang-go smartmontools
+apt-get install -y --no-install-recommends ca-certificates curl git smartmontools
 
 if [[ ! -x "${SMARTCTL_BIN}" ]]; then
   echo "smartctl binary not found at ${SMARTCTL_BIN}." >&2
@@ -43,6 +104,8 @@ cleanup() {
   rm -rf "${TMP_DIR}"
 }
 trap cleanup EXIT
+
+ensure_go_toolchain
 
 echo "[2/6] Downloading source from GitHub..."
 git clone --depth 1 --branch "${REPO_REF}" "https://github.com/${REPO_OWNER}/${REPO_NAME}.git" "${TMP_DIR}/repo"
